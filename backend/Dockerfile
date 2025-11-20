@@ -18,6 +18,11 @@ RUN apt-get update && apt-get install -y libpq-dev libpqxx-dev
 FROM debian:bookworm-slim
 WORKDIR /srv/app
 
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libpqxx-6.4 \
+    libpq5 \
+    && rm -rf /var/lib/apt/lists/*
+
 COPY --from=build /app/build/main /usr/local/bin/messanger
 COPY templates ./templates
 

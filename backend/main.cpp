@@ -1,29 +1,43 @@
-#include "crow.h"
-#include <cstdlib>
-#include <string>
+#include "db/connection.h"
+#include "db/user_repo.h"
+#include <crow.h>
 
-int main()
-{
+int main() {
     crow::SimpleApp app;
 
-    crow::mustache::set_base("templates");
+    Database db;
+    UserRepository users(db.get());
 
-    // Для отдачи cтатических файлов (css, js, картинки)
-    CROW_ROUTE(app, "/<string>")
-    ([](const crow::request& req, crow::response& res, std::string filename){
-        std::string full_path = "templates/" + filename;
-        res.set_static_file_info(full_path);
-        res.end();
+    // получить список пользователей
+    CROW_ROUTE(app, "/users")
+    ([&users]() {
+        auto list = users.getAllUsers();
+
+        crow::json::wvalue result;
+        crow::json::wvalue::list users_json;
+        users_json.reserve(list.size());
+
+        for (auto& u : list) {
+            crow::json::wvalue user;
+            user["id"] = u.id;
+            user["username"] = u.username;
+            users_json.emplace_back(std::move(user));
+        }
+
+        result["users"] = std::move(users_json);
+        return result;
     });
 
-    CROW_ROUTE(app, "/")([](){
-        auto page = crow::mustache::load_text("index.html");
-        return page;
+    // добавить пользователя
+    CROW_ROUTE(app, "/users").methods("POST"_method)
+    ([&users](const crow::request& req) {
+        auto body = crow::json::load(req.body);
+        if (!body || !body.has("username"))
+            return crow::response(400);
+
+        int id = users.createUser(body["username"].s());
+        return crow::response(200, "Created user id = " + std::to_string(id));
     });
 
-    // Получаем порт из переменной окружения, по умолчанию 8080
-    const char* port_env = std::getenv("PORT");
-    int port = port_env ? std::stoi(port_env) : 8080;
-    
-    app.port(port).multithreaded().run();
+    app.port(8080).run();
 }
